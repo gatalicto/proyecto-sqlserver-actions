@@ -41,7 +41,6 @@ jobs:
         run: |
           echo "Ejecutando scripts en orden..."
           
-          # Ruta de sqlcmd en SQL Server 2022 (con el parámetro -C para confiar en el certificado)
           SQLCMD="/opt/mssql-tools18/bin/sqlcmd -C"
 
           echo "1. Creando base de datos..."
