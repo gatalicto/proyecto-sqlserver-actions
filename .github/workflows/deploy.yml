@@ -1,8 +1,62 @@
 name: Deploy SQL Server
-on: [push]
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
 jobs:
-  build:
+  deploy-db:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Start SQL Server Docker Container
+        run: |
+          docker run -d \
+            --name mssql-container \
+            -e "ACCEPT_EULA=Y" \
+            -e "MSSQL_PID=Developer" \
+            -e "SA_PASSWORD=${{ secrets.MSSQL_SA_PASSWORD }}" \
+            -p 1433:1433 \
+            -v ${{ github.workspace }}/sql:/workspace/sql \
+            mcr.microsoft.com/mssql/server:2022-latest
+
+      - name: Wait for SQL Server to be ready
+        run: |
+          echo "Esperando a que SQL Server arranque..."
+          for i in {1..30}; do
+            if docker exec mssql-container /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${{ secrets.MSSQL_SA_PASSWORD }}" -C -Q "SELECT 1" &>/dev/null; then
+              echo "¡SQL Server está listo y respondiendo!"
+              exit 0
+            fi
+            echo "Intento $i... esperando 5 segundos."
+            sleep 5
+          done
+          echo "Error: SQL Server tardó demasiado en iniciar."
+          exit 1
+
+      - name: Execute SQL Scripts
+        run: |
+          echo "Ejecutando scripts en orden..."
+          
+          # Ruta de sqlcmd en SQL Server 2022 (con el parámetro -C para confiar en el certificado)
+          SQLCMD="/opt/mssql-tools18/bin/sqlcmd -C"
+
+          echo "1. Creando base de datos..."
+          docker exec -i mssql-container $SQLCMD -S localhost -U sa -P "${{ secrets.MSSQL_SA_PASSWORD }}" -i /workspace/sql/create_database.sql
+
+          echo "2. Creando tablas..."
+          docker exec -i mssql-container $SQLCMD -S localhost -U sa -P "${{ secrets.MSSQL_SA_PASSWORD }}" -i /workspace/sql/create_tables.sql
+
+          echo "3. Creando procedimiento almacenado..."
+          docker exec -i mssql-container $SQLCMD -U sa -P "${{ secrets.MSSQL_SA_PASSWORD }}" -i /workspace/sql/create_procedure.sql
+
+          echo "4. Creando trigger..."
+          docker exec -i mssql-container $SQLCMD -S localhost -U sa -P "${{ secrets.MSSQL_SA_PASSWORD }}" -i /workspace/sql/create_trigger.sql
+
+          echo "5. Insertando datos de prueba..."
+          docker exec -i mssql-container $SQLCMD -S localhost -U sa -P "${{ secrets.MSSQL_SA_PASSWORD }}" -i /workspace/sql/test_data.sql
+
+          echo "¡Todos los scripts se ejecutaron con éxito en Docker!"
