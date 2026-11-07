@@ -1,17 +1,12 @@
 USE EmpresaDB;
 GO
 
-IF OBJECT_ID ('trg_AuditarVenta', 'TR') IS NOT NULL
-    DROP TRIGGER trg_AuditarVenta;
-GO
-
 CREATE TRIGGER trg_AuditarVenta
 ON Ventas
 AFTER INSERT
 AS
 BEGIN
     SET NOCOUNT ON;
-
     DECLARE @VentaID INT, @Producto VARCHAR(100), @Cantidad INT;
 
     DECLARE cur_Ventas CURSOR FOR
@@ -23,7 +18,6 @@ BEGIN
     WHILE @@FETCH_STATUS = 0
     BEGIN
         EXEC sp_RegistrarAuditoriaYActualizarInventario @VentaID, @Producto, @Cantidad;
-
         FETCH NEXT FROM cur_Ventas INTO @VentaID, @Producto, @Cantidad;
     END
 
