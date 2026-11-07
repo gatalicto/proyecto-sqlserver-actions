@@ -1,0 +1,43 @@
+name: Generar Reporte CSV de Inventario
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch: 
+
+jobs:
+  generar-csv:
+    runs-on: ubuntu-latest
+    env:
+      ACCEPT_EULA: Y
+      MSSQL_PID: Developer
+      SA_PASSWORD: ${{ secrets.MSSQL_SA_PASSWORD }}
+
+    steps:
+      - name: Clonar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Iniciar contenedor de SQL Server
+        run: |
+          docker run -e 'ACCEPT_EULA=Y' -e 'MSSQL_PID=Developer' -e 'MSSQL_SA_PASSWORD=${{ secrets.MSSQL_SA_PASSWORD }}' -p 1433:1433 -d --name sql_server mcr.microsoft.com/mssql/server:2022-latest
+          echo "Esperando a que SQL Server inicie..."
+          sleep 20 
+
+      - name: Construir la BD y Poblar Datos
+        run: |
+          sqlcmd -S localhost -U sa -P "${{ secrets.MSSQL_SA_PASSWORD }}" -i sql/create_database.sql
+          sqlcmd -S localhost -U sa -P "${{ secrets.MSSQL_SA_PASSWORD }}" -d EmpresaDB -i sql/create_tables.sql
+          sqlcmd -S localhost -U sa -P "${{ secrets.MSSQL_SA_PASSWORD }}" -d EmpresaDB -i sql/create_procedure.sql
+          sqlcmd -S localhost -U sa -P "${{ secrets.MSSQL_SA_PASSWORD }}" -d EmpresaDB -i sql/create_trigger.sql
+          sqlcmd -S localhost -U sa -P "${{ secrets.MSSQL_SA_PASSWORD }}" -d EmpresaDB -i sql/test_data.sql
+
+      - name: Generar Reporte CSV
+        run: |
+          sqlcmd -S localhost -U sa -P "${{ secrets.MSSQL_SA_PASSWORD }}" -d EmpresaDB -Q "SET NOCOUNT ON; SELECT i.Producto, i.Existencias, ISNULL(SUM(v.Cantidad), 0) AS TotalVendido FROM Inventario i LEFT JOIN Ventas v ON i.Producto = v.Producto GROUP BY i.Producto, i.Existencias;" -s "," -W -o reporte_inventario.csv
+
+      - name: Subir Reporte como Artifact a GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporte-inventario-csv
+          path: reporte_inventario.csv
+          retention-days: 7
