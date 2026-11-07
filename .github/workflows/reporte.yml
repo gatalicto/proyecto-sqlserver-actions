@@ -24,16 +24,22 @@ jobs:
           sleep 20 
 
       - name: Construir la BD y Poblar Datos
-        run: |
-          sqlcmd -S localhost -U sa -P "${{ secrets.MSSQL_SA_PASSWORD }}" -i sql/create_database.sql
-          sqlcmd -S localhost -U sa -P "${{ secrets.MSSQL_SA_PASSWORD }}" -d EmpresaDB -i sql/create_tables.sql
-          sqlcmd -S localhost -U sa -P "${{ secrets.MSSQL_SA_PASSWORD }}" -d EmpresaDB -i sql/create_procedure.sql
-          sqlcmd -S localhost -U sa -P "${{ secrets.MSSQL_SA_PASSWORD }}" -d EmpresaDB -i sql/create_trigger.sql
-          sqlcmd -S localhost -U sa -P "${{ secrets.MSSQL_SA_PASSWORD }}" -d EmpresaDB -i sql/test_data.sql
+        run: 
+          docker cp sql sql_server:/sql
+          
+          docker exec sql_server /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${{ secrets.MSSQL_SA_PASSWORD }}" -C -i /sql/create_database.sql
+          docker exec sql_server /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${{ secrets.MSSQL_SA_PASSWORD }}" -C -d EmpresaDB -i /sql/create_tables.sql
+          docker exec sql_server /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${{ secrets.MSSQL_SA_PASSWORD }}" -C -d EmpresaDB -i /sql/create_procedure.sql
+          docker exec sql_server /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${{ secrets.MSSQL_SA_PASSWORD }}" -C -d EmpresaDB -i /sql/create_trigger.sql
+          docker exec sql_server /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${{ secrets.MSSQL_SA_PASSWORD }}" -C -d EmpresaDB -i /sql/test_data.sql
 
       - name: Generar Reporte CSV
         run: |
-          sqlcmd -S localhost -U sa -P "${{ secrets.MSSQL_SA_PASSWORD }}" -d EmpresaDB -Q "SET NOCOUNT ON; SELECT i.Producto, i.Existencias, ISNULL(SUM(v.Cantidad), 0) AS TotalVendido FROM Inventario i LEFT JOIN Ventas v ON i.Producto = v.Producto GROUP BY i.Producto, i.Existencias;" -s "," -W -o reporte_inventario.csv
+      
+          docker exec sql_server /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${{ secrets.MSSQL_SA_PASSWORD }}" -C -d EmpresaDB -Q "SET NOCOUNT ON; SELECT i.Producto, i.Existencias, ISNULL(SUM(v.Cantidad), 0) AS TotalVendido FROM Inventario i LEFT JOIN Ventas v ON i.Producto = v.Producto GROUP BY i.Producto, i.Existencias;" -s "," -W -o /reporte_inventario.csv
+          
+    
+          docker cp sql_server:/reporte_inventario.csv ./reporte_inventario.csv
 
       - name: Subir Reporte como Artifact a GitHub
         uses: actions/upload-artifact@v4
