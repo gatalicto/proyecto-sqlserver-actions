@@ -24,9 +24,8 @@ jobs:
           sleep 20 
 
       - name: Construir la BD y Poblar Datos
-        run: 
+        run: |
           docker cp sql sql_server:/sql
-          
           docker exec sql_server /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${{ secrets.MSSQL_SA_PASSWORD }}" -C -i /sql/create_database.sql
           docker exec sql_server /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${{ secrets.MSSQL_SA_PASSWORD }}" -C -d EmpresaDB -i /sql/create_tables.sql
           docker exec sql_server /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${{ secrets.MSSQL_SA_PASSWORD }}" -C -d EmpresaDB -i /sql/create_procedure.sql
@@ -35,10 +34,7 @@ jobs:
 
       - name: Generar Reporte CSV
         run: |
-      
           docker exec sql_server /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${{ secrets.MSSQL_SA_PASSWORD }}" -C -d EmpresaDB -Q "SET NOCOUNT ON; SELECT i.Producto, i.Existencias, ISNULL(SUM(v.Cantidad), 0) AS TotalVendido FROM Inventario i LEFT JOIN Ventas v ON i.Producto = v.Producto GROUP BY i.Producto, i.Existencias;" -s "," -W -o /reporte_inventario.csv
-          
-    
           docker cp sql_server:/reporte_inventario.csv ./reporte_inventario.csv
 
       - name: Subir Reporte como Artifact a GitHub
